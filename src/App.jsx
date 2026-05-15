@@ -220,6 +220,29 @@ const QUESTIONS = [
 
 const dimKeys = ["paper", "lit", "advisor", "mode"];
 
+/** QUESTIONS[].dim -> answers 里累计票用的 key */
+const DIM_TO_ANSWER_KEY = { WS: "paper", CE: "lit", FR: "advisor", JT: "mode" };
+
+function letterForChoice(q, idx) {
+  if (idx === 0) return q.aVal;
+  return q.dim[0] === q.aVal ? q.dim[1] : q.dim[0];
+}
+
+function majorityLetter(letters) {
+  if (!letters?.length) return "W";
+  const counts = {};
+  for (const L of letters) counts[L] = (counts[L] || 0) + 1;
+  let best = letters[0];
+  let max = -1;
+  for (const [L, c] of Object.entries(counts)) {
+    if (c > max) {
+      max = c;
+      best = L;
+    }
+  }
+  return best;
+}
+
 export default function App() {
   const [screen, setScreen] = useState("intro"); // intro | quiz | result
   const [step, setStep] = useState(0);
@@ -227,19 +250,23 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [animating, setAnimating] = useState(false);
 
-  const handleAnswer = (qid, idx) => {
-    const letter = questions[step].result[idx];
-    const newAnswers = { ...answers, [qid]: letter };
+  const handleAnswer = (idx) => {
+    const q = QUESTIONS[step];
+    const letter = letterForChoice(q, idx);
+    const key = DIM_TO_ANSWER_KEY[q.dim];
+    const prev = answers[key] || [];
+    const newAnswers = { ...answers, [key]: [...prev, letter] };
+
     setAnswers(newAnswers);
 
-    if (step < questions.length - 1) {
+    if (step < QUESTIONS.length - 1) {
       setAnimating(true);
       setTimeout(() => {
         setStep(step + 1);
         setAnimating(false);
       }, 300);
     } else {
-      const code = dimKeys.map((k) => newAnswers[k] || questions[dimKeys.indexOf(k)].result[0]).join("");
+      const code = dimKeys.map((k) => majorityLetter(newAnswers[k])).join("");
       setResult(code);
       setScreen("result");
     }
@@ -273,10 +300,10 @@ export default function App() {
         {screen === "intro" && <Intro onStart={() => setScreen("quiz")} />}
         {screen === "quiz" && (
           <Quiz
-            q={questions[step]}
+            q={QUESTIONS[step]}
             step={step}
-            total={questions.length}
-            onAnswer={handleAnswer}
+            total={QUESTIONS.length}
+            onPick={handleAnswer}
             animating={animating}
           />
         )}
@@ -284,7 +311,7 @@ export default function App() {
       </div>
 
       <div style={styles.footer}>
-        Readme · 让科研不再孤独 · readme.ai
+        Readme · 让科研不再孤独 · readmepaper.cn
       </div>
     </div>
   );
@@ -328,13 +355,13 @@ function Intro({ onStart }) {
       </button>
 
       <div style={styles.statsRow}>
-        <span>共4题</span><span>·</span><span>16种类型</span><span>·</span><span>约1分钟</span>
+        <span>共12题</span><span>·</span><span>16种类型</span><span>·</span><span>约2分钟</span>
       </div>
     </div>
   );
 }
 
-function Quiz({ q, step, total, onAnswer, animating }) {
+function Quiz({ q, step, total, onPick, animating }) {
   return (
     <div style={{ ...styles.card, opacity: animating ? 0 : 1, transition: "opacity 0.25s" }}>
       <div style={styles.stepIndicator}>
@@ -350,13 +377,14 @@ function Quiz({ q, step, total, onAnswer, animating }) {
         ))}
       </div>
       <div style={styles.qNum}>第 {step + 1} / {total} 题</div>
+      {q.dimLabel && <div style={styles.dimLabel}>{q.dimLabel}</div>}
       <div style={styles.qTitle}>{q.title}</div>
       <div style={styles.optionsCol}>
         {[q.a, q.b].map((opt, idx) => (
           <button
             key={idx}
             style={styles.optionBtn}
-            onClick={() => onAnswer(q.id, idx)}
+            onClick={() => onPick(idx)}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = "#1a1a1a";
               e.currentTarget.style.color = "#fff";
@@ -597,6 +625,13 @@ const styles = {
     textAlign: "center",
     marginBottom: 8,
     letterSpacing: "0.1em",
+  },
+  dimLabel: {
+    fontSize: 12,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 6,
+    fontFamily: "monospace",
   },
   qTitle: {
     fontSize: 18,
